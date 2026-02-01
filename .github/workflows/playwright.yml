@@ -34,3 +34,15 @@ jobs:
             playwright-report/
             pytest-report.xml
           retention-days: 30
+      - name: Run Targeted Tests
+        run: |
+          MSG=$(git log -1 --pretty=%B)
+          if [[ "$MSG" == *"#billing"* ]]; then
+            npx playwright test --grep @billing
+          elif [[ "$MSG" == *"#api"* ]]; then
+            pytest tests_python/ --junitxml=pytest-report.xml
+          elif [[ "$MSG" == *"#full"* ]]; then
+            npm run test:full
+          else
+            npx playwright test --grep @smoke
+          fi

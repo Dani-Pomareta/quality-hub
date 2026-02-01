@@ -1,0 +1,26 @@
+{
+  "name": "quality-hub",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test:ui": "npx playwright test",
+    "test:ui:smoke": "npx playwright test --grep @smoke",
+    "test:ui:reg": "npx playwright test --grep @regression",
+    "test:api": ".\\venv\\Scripts\\python.exe -m pytest tests_python/ --junitxml=pytest-report.xml",
+    "test:full": "npm run test:ui && npm run test:api",
+    "test:report": "npx playwright show-report",
+    "clean": "rm -rf playwright-report test-resutelts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.58.1",
+    "@types/node": "^25.1.0"
+  },
+  "dependencies": {
+    "save-dev": "^0.0.1-security"
+  }
+}

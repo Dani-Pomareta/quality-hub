@@ -1,70 +1,49 @@
-name: Quality Gates
-on:
-  push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+name: Unified Quality Gate
+on: [push]
 
 jobs:
-  test:
-    timeout-minutes: 60
+  quality-gate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Needed to read commit messages accurately
+      - uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.10' }
 
-      - name: Setup Node & Python
-        uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-
-      - name: Install Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
-
-      - name: Install dependencies
+      - name: Install All Dependencies
         run: |
           npm ci
           npx playwright install --with-deps
-          # Add 'requests' here so your Python tests can run
           pip install pytest pytest-json-report requests
+          # Install k6
+          curl -L https://github.com/grafana/k6/releases/download/v0.49.0/k6-v0.49.0-linux-amd64.tar.gz | tar -xz
+          sudo mv k6-v0.49.0-linux-amd64/k6 /usr/local/bin/
 
-      - name: Execute and Aggregate
+      - name: Execution Engine
         run: |
           MSG=$(git log -1 --pretty=%B)
-          mkdir -p playwright-report
+          
+          # 3.1 Always Run Smoke (API & UI)
+          pytest tests_python/ -m smoke --json-report --json-report-file=api-report.json || true
+          npx playwright test --grep @smoke --reporter=json > playwright-report/results.json || true
 
-          # Set flags based on commit message
-          [[ "$MSG" == *"#full"* ]] && RUN_ALL=true || RUN_ALL=false
-          [[ "$MSG" == *"#regression"* ]] && RUN_REG=true || RUN_REG=false
-          [[ "$MSG" == *"#perf"* ]] && RUN_PERF=true || RUN_PERF=false
-          [[ "$MSG" == *"#smoke"* || ("$RUN_ALL" == false && "$RUN_REG" == false && "$RUN_PERF" == false) ]] && RUN_SMOKE=true || RUN_SMOKE=false
-
-          # 1. PERFORMANCE
-          if [[ "$RUN_ALL" == "true" ]] || [[ "$RUN_PERF" == "true" ]]; then
-            k6 run tests_perf/smoke-load.js --summary-export=k6-summary.json || echo "k6 failed"
+          # 3.2 Regression Logic
+          if [[ "$MSG" == *"#regression"* || "$MSG" == *"#full"* ]]; then
+            pytest tests_python/ --json-report --json-report-file=api-report.json || true
+            npx playwright test --reporter=json > playwright-report/results.json || true
           fi
 
-          # 2. API / BACKEND
-          if [[ "$RUN_ALL" == "true" ]] || [[ "$RUN_REG" == "true" ]]; then
-            pytest tests_python/ --json-report --json-report-file=api-report.json || echo "API failed"
-          elif [[ "$RUN_SMOKE" == "true" ]]; then
-            pytest tests_python/ -m smoke --json-report --json-report-file=api-report.json || echo "API smoke failed"
+          # 3.4 Performance Logic
+          if [[ "$MSG" == *"#performance"* || "$MSG" == *"#full"* ]]; then
+            k6 run tests_perf/smoke-load.js --summary-export=k6-summary.json || true
           fi
 
-          # 3. UI / PLAYWRIGHT
-          if [[ "$RUN_ALL" == "true" ]] || [[ "$RUN_REG" == "true" ]]; then
-            npx playwright test --project=chromium --reporter=json > playwright-report/results.json || echo "UI full failed"
-          else
-            npx playwright test --grep @smoke --project=chromium --reporter=json > playwright-report/results.json || echo "UI smoke failed"
-          fi
-
+      - name: Aggregate & Upload
+        if: always()
+        run: |
           node generate-dashboard.js
-
-      - name: Upload Dashboard
-        uses: actions/upload-artifact@v4
+      
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: Quality-Dashboard

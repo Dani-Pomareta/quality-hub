@@ -1,34 +1,29 @@
-import http from 'k6/http';
 import { check, sleep } from 'k6';
-// Use the official k6 jslib for the summary
+import { getBookings, getHealth } from './lib/api.js';
+import { standardThresholds } from './config/thresholds.js';
 
 export const options = {
-  vus: 5,
-  duration: '10s',
-  thresholds: {
-    http_req_duration: ['p(95)<500'], 
-  },
+    thresholds: standardThresholds,
+    stages: [
+        { duration: '10s', target: 5 },  // Ramp-up to 5 users
+        { duration: '20s', target: 5 },  // Stay at 5 users
+        { duration: '10s', target: 0 },  // Ramp-down
+    ],
 };
 
-export default function smokeLoad () {
-  const res = http.get('https://www.saucedemo.com/');
-  check(res, { 'status was 200': (r) => r.status === 200 });
-  sleep(1);
-}
+export default function () {
+    // 1. Check System Health
+    const healthRes = getHealth();
+    check(healthRes, {
+        'system is up': (r) => r.status === 200,
+    });
 
-// STABLE SUMMARY HANDLER
-export function handleSummary(data) {
-  return {
-    'stdout': textSummary(data, { indent: ' ', enableColors: true }), // Prints to GitHub Logs
-    'k6-summary.json': JSON.stringify(data), // Saves raw data for the bundle
-  };
-}
+    // 2. Load Bookings
+    const bookingRes = getBookings();
+    check(bookingRes, {
+        'bookings retrieved': (r) => r.status === 200,
+        'response time < 200ms': (r) => r.timings.duration < 200,
+    });
 
-// Helper function for the console summary
-function textSummary(data, options) {
- // const { indent, enableColors } = options;
-  return `k6 Performance Results Summary\n` + 
-         `Total Requests: ${data.metrics.http_reqs.values.count}\n` +
-         `Failures: ${data.metrics.http_req_failed.values.passes}\n` +
-         `Avg Latency: ${data.metrics.http_req_duration.values.avg.toFixed(2)}ms`;
+    sleep(1);
 }

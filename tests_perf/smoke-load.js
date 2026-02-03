@@ -10,7 +10,7 @@ export const options = {
   },
 };
 
-export default function () {
+export default function smokeLoad () {
   const res = http.get('https://www.saucedemo.com/');
   check(res, { 'status was 200': (r) => r.status === 200 });
   sleep(1);
@@ -26,7 +26,7 @@ export function handleSummary(data) {
 
 // Helper function for the console summary
 function textSummary(data, options) {
-  const { indent, enableColors } = options;
+ // const { indent, enableColors } = options;
   return `k6 Performance Results Summary\n` + 
          `Total Requests: ${data.metrics.http_reqs.values.count}\n` +
          `Failures: ${data.metrics.http_req_failed.values.passes}\n` +

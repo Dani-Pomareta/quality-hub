@@ -19,21 +19,26 @@ jobs:
           curl -L https://github.com/grafana/k6/releases/download/v0.49.0/k6-v0.49.0-linux-amd64.tar.gz | tar -xz
           sudo mv k6-v0.49.0-linux-amd64/k6 /usr/local/bin/
 
-      - name: Execution Engine
+      - name: Individual Execution
         run: |
-          mkdir -p playwright-report
+          # 1. API
+          pytest tests_python/test_simple.py -m smoke --json-report --json-report-file=api-report.json || true
           
-          # 1. API 
-          pytest tests_python/ -m smoke --json-report --json-report-file=api-report.json || echo "API failed"
+          # 2. UI
+          mkdir -p playwright-report
+          npx playwright test tests_ui/simple.spec.ts --grep @smoke --reporter=json > playwright-report/results.json || true
+          
+          # 3. Performance
+          k6 run tests_perf/simple-perf.js --summary-export=k6-summary.json || true
 
-          # 2. UI - Explicitly point to the directory
-          # Adding --list to debug if tests are found
-          npx playwright test tests_ui/ --grep @smoke --reporter=json > playwright-report/results.json || echo "UI failed"
-
-          # 3. Perf - Lowered Intensity
-          if [[ "$MSG" == *"#performance"* ]] || [[ "$MSG" == *"#full"* ]]; then
-            k6 run tests_perf/smoke-load.js --summary-export=k6-summary.json || echo "k6 failed"
-          fi
+      - name: Archive Raw JSONs
+        uses: actions/upload-artifact@v4
+        with:
+          name: Raw-JSON-Reports
+          path: |
+            api-report.json
+            playwright-report/results.json
+            k6-summary.json
 
       - name: Aggregate & Upload
         if: always()

@@ -33,7 +33,7 @@ def test_booking_schema_and_data_types():
 def test_create_booking_and_verify_persistence():
     """Showcase: State Persistence (Creating then Verifying)."""
     payload = {
-        "firstname": "Gemini",
+        "firstname": "Just-A",
         "lastname": "Tester",
         "totalprice": 999,
         "depositpaid": True,
@@ -51,4 +51,4 @@ def test_create_booking_and_verify_persistence():
     
     # Verify the data was actually saved correctly
     get_response = requests.get(f"{BASE_URL}/booking/{booking_id}")
-    assert get_response.json()["firstname"] == "Gemini"
+    assert get_response.json()["firstname"] == "Just-A"

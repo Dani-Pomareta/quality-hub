@@ -10,6 +10,7 @@
     "test:api": ".\\venv\\Scripts\\python.exe -m pytest tests_python/ --junitxml=pytest-report.xml",
     "test:full": "npm run test:ui && npm run test:api",
     "test:report": "npx playwright show-report",
+    "test:perf": "k6 run tests_perf/smoke-load.js --summary-export=k6-summary.json",
     "clean": "rm -rf playwright-report test-resutelts"
   },
   "keywords": [],

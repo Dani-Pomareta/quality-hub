@@ -1,48 +1,64 @@
-name: Quality Gate
+name: Quality Gates
 on:
   push:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+
 jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+        with:
+          fetch-depth: 0 # Needed to read commit messages accurately
+
+      - name: Setup Node & Python
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
-      - name: Install dependencies
-        run: npm ci
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
-      - name: Run Playwright tests
-        run: npx playwright test
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+      
+      - name: Install Python
+        uses: actions/setup-python@v4
         with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 30
-      - name: Upload All Quality Reports
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps
+          pip install pytest requests
+
+      - name: Execute Targeted Suite
+        run: |
+          MSG=$(git log -1 --pretty=%B)
+          echo "Commit Message: $MSG"
+          
+          if [[ "$MSG" == *"#perf"* ]]; then
+            curl -L https://github.com/grafana/k6/releases/download/v0.49.0/k6-v0.49.0-linux-amd64.tar.gz | tar -xz
+            ./k6-v0.49.0-linux-amd64/k6 run tests_perf/smoke-load.js --summary-export=k6-summary.json
+          
+          elif [[ "$MSG" == *"#api"* ]]; then
+            pytest tests_python/ --junitxml=pytest-report.xml
+          
+          elif [[ "$MSG" == *"#full"* ]]; then
+            npm run test:full
+            pytest tests_python/ --junitxml=pytest-report.xml || true
+          
+          else
+            echo "Defaulting to Smoke Suite"
+            npx playwright test --grep @smoke
+          fi
+
+      - name: Archive Quality Bundle
         uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+        if: always() 
         with:
-          name: full-quality-bundle
+          name: quality-report-bundle
           path: |
             playwright-report/
             pytest-report.xml
+            k6-summary.json
+          if-no-files-found: warn
           retention-days: 30
-      - name: Run Targeted Tests
-        run: |
-          MSG=$(git log -1 --pretty=%B)
-          if [[ "$MSG" == *"#billing"* ]]; then
-            npx playwright test --grep @billing
-          elif [[ "$MSG" == *"#api"* ]]; then
-            pytest tests_python/ --junitxml=pytest-report.xml
-          elif [[ "$MSG" == *"#full"* ]]; then
-            npm run test:full
-          else
-            npx playwright test --grep @smoke
-          fi

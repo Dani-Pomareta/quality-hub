@@ -11,7 +11,7 @@ test('Full Checkout Regression @regression @billing', async ({ page }) => {
   // 1. Login
   await login.goto();
   //await login.login('standard_user', 'secret_sauce');
-  await login.login('standard_user', 'secret_sauceXX'); // Breaker
+  await login.login('standard_user', 'secret_saucenot'); // Breaker
 
   // 2. Inventory Actions
   await inventory.addBackpack();

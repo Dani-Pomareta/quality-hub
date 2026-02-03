@@ -49,12 +49,12 @@ jobs:
             pytest tests_python/ --json-report --json-report-file=api-report.json || echo "pytest failed"
           fi
 
-          # UI BLOCK
+          # UI BLOCK - Optimized for speed
           if [[ "$MSG" == *"#full"* ]]; then
-            npx playwright test --reporter=json > playwright-report/results.json || echo "Playwright full failed"
+            npx playwright test --project=chromium --workers=1 --reporter=json > playwright-report/results.json || echo "Playwright full failed"
           else
-            # Default to smoke if no specific tags or #smoke is present
-            npx playwright test --grep @smoke --reporter=json > playwright-report/results.json || echo "Playwright smoke failed"
+            # Smoke should be LIGHTNING fast
+            npx playwright test --grep @smoke --project=chromium --workers=1 --reporter=json > playwright-report/results.json || echo "Playwright smoke failed"
           fi
 
           # AGGREGATOR

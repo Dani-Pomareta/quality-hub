@@ -48,3 +48,4 @@ const html = `
 
 fs.writeFileSync('dashboard.html', html);
 console.log("✅ dashboard.html generated successfully.");
+process.exit(0);

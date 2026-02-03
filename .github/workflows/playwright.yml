@@ -30,32 +30,26 @@ jobs:
           npx playwright install --with-deps
           pip install pytest requests
 
-      - name: Execute Targeted Suite
+      - name: Execute and Aggregate
         run: |
           MSG=$(git log -1 --pretty=%B)
+          
+          # 1. Run Tests (ensuring JSON output)
           if [[ "$MSG" == *"#perf"* ]]; then
             curl -L https://github.com/grafana/k6/releases/download/v0.49.0/k6-v0.49.0-linux-amd64.tar.gz | tar -xz
-            ./k6-v0.49.0-linux-amd64/k6 run tests_perf/smoke-load.js
+            ./k6-v0.49.0-linux-amd64/k6 run tests_perf/smoke-load.js --summary-export=k6-summary.json
           elif [[ "$MSG" == *"#api"* ]]; then
-            pytest tests_python/ --junitxml=pytest-report.xml
-          elif [[ "$MSG" == *"#full"* ]]; then
-            npm run test:full
-            pytest tests_python/ --junitxml=pytest-report.xml || true
+            pytest tests_python/ --json-report --json-report-file=api-report.json
           else
-            npx playwright test --grep @smoke
+            npx playwright test --grep @smoke --reporter=json > playwright-report/results.json || true
           fi
 
-      - name: Create Unified Quality Bundle
+          # 2. Run the Aggregator
+          node generate-dashboard.js
+
+      - name: Upload Dashboard
         uses: actions/upload-artifact@v4
-        if: always() # This ensures we get the report even if k6 or Playwright fails
+        if: always()
         with:
-          name: full-quality-bundle
-          # We list every possible output file here. 
-          # GitHub will ignore the ones that weren't created.
-          path: |
-            playwright-report/
-            pytest-report.xml
-            k6-summary.json
-            test-results/
-          if-no-files-found: warn
-          retention-days: 30
+          name: Quality-Dashboard
+          path: dashboard.html

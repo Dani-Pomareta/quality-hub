@@ -35,30 +35,31 @@ jobs:
         run: |
           MSG=$(git log -1 --pretty=%B)
           mkdir -p playwright-report
-          
-          # Force fresh empty JSONs
-          echo "{}" > playwright-report/results.json
-          echo "{}" > api-report.json
-          echo "{}" > k6-summary.json
 
-          # PERFORMANCE
-          if [[ "$MSG" == *"#full"* ]] || [[ "$MSG" == *"#perf"* ]]; then
-            curl -L https://github.com/grafana/k6/releases/download/v0.49.0/k6-v0.49.0-linux-amd64.tar.gz | tar -xz
-            sudo cp k6-v0.49.0-linux-amd64/k6 /usr/local/bin/
+          # Set flags based on commit message
+          [[ "$MSG" == *"#full"* ]] && RUN_ALL=true || RUN_ALL=false
+          [[ "$MSG" == *"#regression"* ]] && RUN_REG=true || RUN_REG=false
+          [[ "$MSG" == *"#perf"* ]] && RUN_PERF=true || RUN_PERF=false
+          [[ "$MSG" == *"#smoke"* || ("$RUN_ALL" == false && "$RUN_REG" == false && "$RUN_PERF" == false) ]] && RUN_SMOKE=true || RUN_SMOKE=false
+
+          # 1. PERFORMANCE
+          if [[ "$RUN_ALL" == "true" ]] || [[ "$RUN_PERF" == "true" ]]; then
             k6 run tests_perf/smoke-load.js --summary-export=k6-summary.json || echo "k6 failed"
           fi
 
-          # API
-          if [[ "$MSG" == *"#full"* ]] || [[ "$MSG" == *"#api"* ]]; then
-            # Run pytest - it will now find 'requests'
+          # 2. API / BACKEND
+          if [[ "$RUN_ALL" == "true" ]] || [[ "$RUN_REG" == "true" ]]; then
             pytest tests_python/ --json-report --json-report-file=api-report.json || echo "API failed"
+          elif [[ "$RUN_SMOKE" == "true" ]]; then
+            pytest tests_python/ -m smoke --json-report --json-report-file=api-report.json || echo "API smoke failed"
           fi
 
-          # UI
-          # Use a fallback to ensure Playwright actually tries to run
-          TARGET_GREP=$([[ "$MSG" == *"#full"* ]] && echo "" || echo "@smoke")
-          echo "Targeting UI tests with: $TARGET_GREP"
-          npx playwright test --grep "$TARGET_GREP" --project=chromium --workers=1 --reporter=json > playwright-report/results.json || echo "UI failed"
+          # 3. UI / PLAYWRIGHT
+          if [[ "$RUN_ALL" == "true" ]] || [[ "$RUN_REG" == "true" ]]; then
+            npx playwright test --project=chromium --reporter=json > playwright-report/results.json || echo "UI full failed"
+          else
+            npx playwright test --grep @smoke --project=chromium --reporter=json > playwright-report/results.json || echo "UI smoke failed"
+          fi
 
           node generate-dashboard.js
 

@@ -33,23 +33,28 @@ jobs:
       - name: Execute Targeted Suite
         run: |
           MSG=$(git log -1 --pretty=%B)
-          echo "Commit Message: $MSG"
-          
           if [[ "$MSG" == *"#perf"* ]]; then
             curl -L https://github.com/grafana/k6/releases/download/v0.49.0/k6-v0.49.0-linux-amd64.tar.gz | tar -xz
-            ./k6-v0.49.0-linux-amd64/k6 run tests_perf/smoke-load.js --summary-export=k6-summary.json
-          
+            ./k6-v0.49.0-linux-amd64/k6 run tests_perf/smoke-load.js
           elif [[ "$MSG" == *"#api"* ]]; then
             pytest tests_python/ --junitxml=pytest-report.xml
-          
           elif [[ "$MSG" == *"#full"* ]]; then
             npm run test:full
             pytest tests_python/ --junitxml=pytest-report.xml || true
-          
           else
-            echo "Defaulting to Smoke Suite"
             npx playwright test --grep @smoke
           fi
+
+      - name: Upload All Quality Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: full-quality-bundle
+          path: |
+            playwright-report/
+            pytest-report.xml
+            k6-report.html
+          if-no-files-found: warn
 
       - name: Archive Quality Bundle
         uses: actions/upload-artifact@v4

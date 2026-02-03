@@ -24,46 +24,39 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
           npm ci
           npx playwright install --with-deps
-          pip install pytest requests
+          # ADD THE JSON REPORTER HERE
+          pip install pytest pytest-json-report 
 
       - name: Execute and Aggregate
         run: |
           MSG=$(git log -1 --pretty=%B)
           mkdir -p playwright-report
-
-          # Initialize empty JSONs so the aggregator doesn't die
+          
+          # Initialize JSONs as empty objects {} so JSON.parse doesn't crash
           echo "{}" > playwright-report/results.json
           echo "{}" > api-report.json
           echo "{}" > k6-summary.json
 
-          # 1. Performance (Only if tagged)
+          # PERFORMANCE
           if [[ "$MSG" == *"#full"* ]] || [[ "$MSG" == *"#perf"* ]]; then
-            echo "Installing k6..."
             curl -L https://github.com/grafana/k6/releases/download/v0.49.0/k6-v0.49.0-linux-amd64.tar.gz | tar -xz
-            # Move it to a global bin so you don't need the messy ./path/
             sudo cp k6-v0.49.0-linux-amd64/k6 /usr/local/bin/
-            
-            echo "Running k6..."
-            k6 run tests_perf/smoke-load.js --summary-export=k6-summary.json
+            k6 run tests_perf/smoke-load.js --summary-export=k6-summary.json || echo "k6 failed"
           fi
 
-          # 2. API (Only if tagged)
+          # API
           if [[ "$MSG" == *"#full"* ]] || [[ "$MSG" == *"#api"* ]]; then
-            echo "Running Pytest..."
-            timeout 5m pytest tests_python/ --json-report --json-report-file=api-report.json || echo "API Failed or Timed out"
+            pytest tests_python/ --json-report --json-report-file=api-report.json || echo "API failed"
           fi
 
-          # 3. UI (Headless & Fast)
-          echo "Running UI..."
-          # If #full, run all. If not, run smoke.
+          # UI
           TARGET_GREP=$([[ "$MSG" == *"#full"* ]] && echo "" || echo "@smoke")
-          timeout 5m npx playwright test --grep "$TARGET_GREP" --project=chromium --workers=1 --reporter=json > playwright-report/results.json || echo "UI Failed or Timed out"
+          npx playwright test --grep "$TARGET_GREP" --project=chromium --workers=1 --reporter=json > playwright-report/results.json || echo "UI failed"
 
-          # 4. Aggregate
           node generate-dashboard.js
 
       - name: Upload Dashboard

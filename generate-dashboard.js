@@ -18,10 +18,30 @@ const apiResults = readJSON('api-report.json');
 const perfResults = readJSON('k6-summary.json');
 
 const getStatus = (data, type) => {
-    if (!data) return '<span style="color: gray;">Not Run</span>';
-    if (type === 'ui') return data.stats?.unexpected > 0 ? `<span style="color: red;">Failed (${data.stats.unexpected})</span>` : '<span style="color: green;">Passed</span>';
-    if (type === 'api') return data.exit_code === 0 ? '<span style="color: green;">Passed</span>' : '<span style="color: red;">Failed</span>';
-    if (type === 'perf') return data.metrics ? `<span style="color: blue;">Avg: ${data.metrics.http_req_duration.values.avg.toFixed(2)}ms</span>` : 'Ran';
+    if (!data || Object.keys(data).length <= 2) return '<span style="color: gray;">Not Run/No Data</span>';
+    
+    try {
+        if (type === 'ui') {
+            return data.stats?.unexpected > 0 
+                ? `<span style="color: red;">Failed (${data.stats.unexpected})</span>` 
+                : '<span style="color: green;">Passed</span>';
+        }
+        if (type === 'api') {
+            // Pytest-json-report structure
+            return data.summary?.failed > 0 
+                ? `<span style="color: red;">Failed (${data.summary.failed})</span>` 
+                : '<span style="color: green;">Passed</span>';
+        }
+        if (type === 'perf') {
+            // Securely access k6 metrics
+            const avg = data.metrics?.http_req_duration?.values?.avg;
+            return avg 
+                ? `<span style="color: blue;">Avg: ${avg.toFixed(2)}ms</span>` 
+                : '<span style="color: orange;">Ran (No Latency Data)</span>';
+        }
+    } catch (e) {
+        return '<span style="color: red;">Error parsing data</span>';
+    }
     return 'Unknown';
 };
 

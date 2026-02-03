@@ -1,7 +1,6 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 // Use the official k6 jslib for the summary
-import { jsevent } from 'https://jslib.k6.io/k6-summary/0.0.2/index.js'; 
 
 export const options = {
   vus: 5,

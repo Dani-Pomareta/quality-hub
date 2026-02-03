@@ -45,25 +45,17 @@ jobs:
             npx playwright test --grep @smoke
           fi
 
-      - name: Upload All Quality Reports
+      - name: Create Unified Quality Bundle
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() # This ensures we get the report even if k6 or Playwright fails
         with:
           name: full-quality-bundle
-          path: |
-            playwright-report/
-            pytest-report.xml
-            k6-report.html
-          if-no-files-found: warn
-
-      - name: Archive Quality Bundle
-        uses: actions/upload-artifact@v4
-        if: always() 
-        with:
-          name: quality-report-bundle
+          # We list every possible output file here. 
+          # GitHub will ignore the ones that weren't created.
           path: |
             playwright-report/
             pytest-report.xml
             k6-summary.json
+            test-results/
           if-no-files-found: warn
           retention-days: 30

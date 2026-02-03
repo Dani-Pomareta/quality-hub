@@ -28,15 +28,15 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps
-          # ADD THE JSON REPORTER HERE
-          pip install pytest pytest-json-report 
+          # Add 'requests' here so your Python tests can run
+          pip install pytest pytest-json-report requests
 
       - name: Execute and Aggregate
         run: |
           MSG=$(git log -1 --pretty=%B)
           mkdir -p playwright-report
           
-          # Initialize JSONs as empty objects {} so JSON.parse doesn't crash
+          # Force fresh empty JSONs
           echo "{}" > playwright-report/results.json
           echo "{}" > api-report.json
           echo "{}" > k6-summary.json
@@ -50,11 +50,14 @@ jobs:
 
           # API
           if [[ "$MSG" == *"#full"* ]] || [[ "$MSG" == *"#api"* ]]; then
+            # Run pytest - it will now find 'requests'
             pytest tests_python/ --json-report --json-report-file=api-report.json || echo "API failed"
           fi
 
           # UI
+          # Use a fallback to ensure Playwright actually tries to run
           TARGET_GREP=$([[ "$MSG" == *"#full"* ]] && echo "" || echo "@smoke")
+          echo "Targeting UI tests with: $TARGET_GREP"
           npx playwright test --grep "$TARGET_GREP" --project=chromium --workers=1 --reporter=json > playwright-report/results.json || echo "UI failed"
 
           node generate-dashboard.js

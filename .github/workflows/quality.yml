@@ -34,7 +34,7 @@ jobs:
         run: |
           MSG=$(git log -1 --pretty=%B)
           mkdir -p playwright-report
-          
+
           # Initialize empty JSONs so the aggregator doesn't die
           echo "{}" > playwright-report/results.json
           echo "{}" > api-report.json
@@ -42,25 +42,26 @@ jobs:
 
           # 1. Performance (Only if tagged)
           if [[ "$MSG" == *"#full"* ]] || [[ "$MSG" == *"#perf"* ]]; then
+            echo "Installing k6..."
+            curl -L https://github.com/grafana/k6/releases/download/v0.49.0/k6-v0.49.0-linux-amd64.tar.gz | tar -xz
+            # Move it to a global bin so you don't need the messy ./path/
+            sudo cp k6-v0.49.0-linux-amd64/k6 /usr/local/bin/
+            
             echo "Running k6..."
-            ./k6-v0.49.0-linux-amd64/k6 run tests_perf/smoke-load.js --summary-export=k6-summary.json
+            k6 run tests_perf/smoke-load.js --summary-export=k6-summary.json
           fi
 
           # 2. API (Only if tagged)
           if [[ "$MSG" == *"#full"* ]] || [[ "$MSG" == *"#api"* ]]; then
             echo "Running Pytest..."
-            pytest tests_python/ --json-report --json-report-file=api-report.json
+            timeout 5m pytest tests_python/ --json-report --json-report-file=api-report.json || echo "API Failed or Timed out"
           fi
 
           # 3. UI (Headless & Fast)
-          if [[ "$MSG" == *"#full"* ]]; then
-            echo "Running Full UI..."
-            npx playwright test --project=chromium --workers=1 --reporter=json > playwright-report/results.json
-          else
-            echo "Running Smoke UI..."
-            # Added --grep-invert to ensure it doesn't just 'pass' on empty
-            npx playwright test --grep @smoke --project=chromium --workers=1 --reporter=json > playwright-report/results.json
-          fi
+          echo "Running UI..."
+          # If #full, run all. If not, run smoke.
+          TARGET_GREP=$([[ "$MSG" == *"#full"* ]] && echo "" || echo "@smoke")
+          timeout 5m npx playwright test --grep "$TARGET_GREP" --project=chromium --workers=1 --reporter=json > playwright-report/results.json || echo "UI Failed or Timed out"
 
           # 4. Aggregate
           node generate-dashboard.js

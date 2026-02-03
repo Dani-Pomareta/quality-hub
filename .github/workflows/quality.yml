@@ -33,35 +33,31 @@ jobs:
       - name: Execute and Aggregate
         run: |
           MSG=$(git log -1 --pretty=%B)
-          echo "Commit Message: $MSG"
+          echo "Processing Commit: $MSG"
+          
+          # Create directories early
+          mkdir -p playwright-report test-results
 
-          # Initialize report files to prevent aggregator from crashing if a file is missing
-          mkdir -p playwright-report
-          echo "{}" > playwright-report/results.json
-          echo "{}" > api-report.json
-          echo "{}" > k6-summary.json
-
+          # PERFORMANCE BLOCK
           if [[ "$MSG" == *"#full"* ]] || [[ "$MSG" == *"#perf"* ]]; then
-            echo "Running Performance Suite..."
             curl -L https://github.com/grafana/k6/releases/download/v0.49.0/k6-v0.49.0-linux-amd64.tar.gz | tar -xz
-            ./k6-v0.49.0-linux-amd64/k6 run tests_perf/smoke-load.js --summary-export=k6-summary.json || true
+            ./k6-v0.49.0-linux-amd64/k6 run tests_perf/smoke-load.js --summary-export=k6-summary.json || echo "k6 failed"
           fi
 
+          # API BLOCK
           if [[ "$MSG" == *"#full"* ]] || [[ "$MSG" == *"#api"* ]]; then
-            echo "Running API Suite..."
-            pytest tests_python/ --json-report --json-report-file=api-report.json || true
+            pytest tests_python/ --json-report --json-report-file=api-report.json || echo "pytest failed"
           fi
 
+          # UI BLOCK
           if [[ "$MSG" == *"#full"* ]]; then
-             echo "Running Full UI Suite..."
-             npx playwright test --reporter=json > playwright-report/results.json || true
-          elif [[ "$MSG" == *"#smoke"* ]] || [[ -z "$MSG" ]]; then
-             echo "Running Smoke UI Suite..."
-             npx playwright test --grep @smoke --reporter=json > playwright-report/results.json || true
+            npx playwright test --reporter=json > playwright-report/results.json || echo "Playwright full failed"
+          else
+            # Default to smoke if no specific tags or #smoke is present
+            npx playwright test --grep @smoke --reporter=json > playwright-report/results.json || echo "Playwright smoke failed"
           fi
 
-          # 2. Run the Aggregator
-          echo "Aggregating all reports into dashboard.html..."
+          # AGGREGATOR
           node generate-dashboard.js
 
       - name: Upload Dashboard

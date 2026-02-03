@@ -1,45 +1,50 @@
 const fs = require('fs');
+const path = require('path');
 
-const readJSON = (path) => {
+const readJSON = (filePath) => {
     try {
-        const data = fs.readFileSync(path, 'utf8');
-        return JSON.parse(data);
+        if (fs.existsSync(filePath)) {
+            const data = fs.readFileSync(filePath, 'utf8');
+            return JSON.parse(data);
+        }
     } catch (e) {
-        return { status: "Not Run", stats: {} };
+        console.log(`Warning: Could not parse ${filePath}`);
     }
+    return null;
 };
 
 const uiResults = readJSON('playwright-report/results.json');
 const apiResults = readJSON('api-report.json');
 const perfResults = readJSON('k6-summary.json');
 
-// Simple logic to count passes
-const uiStatus = uiResults.config ? `Passed: ${uiResults.stats?.expected || 0} / Failed: ${uiResults.stats?.unexpected || 0}` : "Skipped";
-const apiStatus = apiResults.summary ? `Passed: ${apiResults.summary.passed || 0}` : "Skipped";
-const perfStatus = perfResults.metrics ? `Avg Latency: ${perfResults.metrics.http_req_duration?.values.avg.toFixed(2)}ms` : "Skipped";
+const getStatus = (data, type) => {
+    if (!data) return '<span style="color: gray;">Not Run</span>';
+    if (type === 'ui') return data.stats?.unexpected > 0 ? `<span style="color: red;">Failed (${data.stats.unexpected})</span>` : '<span style="color: green;">Passed</span>';
+    if (type === 'api') return data.exit_code === 0 ? '<span style="color: green;">Passed</span>' : '<span style="color: red;">Failed</span>';
+    if (type === 'perf') return data.metrics ? `<span style="color: blue;">Avg: ${data.metrics.http_req_duration.values.avg.toFixed(2)}ms</span>` : 'Ran';
+    return 'Unknown';
+};
 
 const html = `
 <html>
-<body style="font-family: Arial; padding: 40px;">
-    <h1>🏁 Full Quality Gate Results</h1>
-    <div style="display: flex; gap: 20px;">
-        <div style="border: 1px solid #ccc; padding: 20px; border-radius: 10px; flex: 1;">
-            <h3>🖥️ UI Status</h3>
-            <p>${uiStatus}</p>
+<body style="font-family: sans-serif; padding: 30px; line-height: 1.6;">
+    <h1 style="color: #333;">🏁 Quality Gate Dashboard</h1>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+        <div style="padding: 20px; border: 2px solid #eee; border-radius: 10px;">
+            <h3>🖥️ UI (Playwright)</h3>
+            <p>Status: ${getStatus(uiResults, 'ui')}</p>
         </div>
-        <div style="border: 1px solid #ccc; padding: 20px; border-radius: 10px; flex: 1;">
-            <h3>🔌 API Status</h3>
-            <p>${apiStatus}</p>
+        <div style="padding: 20px; border: 2px solid #eee; border-radius: 10px;">
+            <h3>🔌 API (Pytest)</h3>
+            <p>Status: ${getStatus(apiResults, 'api')}</p>
         </div>
-        <div style="border: 1px solid #ccc; padding: 20px; border-radius: 10px; flex: 1;">
-            <h3>⚡ Perf Status</h3>
-            <p>${perfStatus}</p>
+        <div style="padding: 20px; border: 2px solid #eee; border-radius: 10px;">
+            <h3>⚡ Perf (k6)</h3>
+            <p>Status: ${getStatus(perfResults, 'perf')}</p>
         </div>
     </div>
-    <br>
-    <p>Check GitHub Artifacts for the deep-dive raw data.</p>
 </body>
-</html>
-`;
+</html>`;
 
 fs.writeFileSync('dashboard.html', html);
+console.log("✅ dashboard.html generated successfully.");

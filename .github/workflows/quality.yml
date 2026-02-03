@@ -22,20 +22,18 @@ jobs:
       - name: Execution Engine
         run: |
           MSG=$(git log -1 --pretty=%B)
-          
-          # 3.1 Always Run Smoke (API & UI)
-          pytest tests_python/ -m smoke --json-report --json-report-file=api-report.json || true
-          npx playwright test --grep @smoke --reporter=json > playwright-report/results.json || true
+          mkdir -p playwright-report  # Ensure directory exists
 
-          # 3.2 Regression Logic
-          if [[ "$MSG" == *"#regression"* || "$MSG" == *"#full"* ]]; then
-            pytest tests_python/ --json-report --json-report-file=api-report.json || true
-            npx playwright test --reporter=json > playwright-report/results.json || true
-          fi
+          # 1. API (Always Smoke)
+          pytest tests_python/ -m smoke --json-report --json-report-file=api-report.json || echo "API Smoke failed"
 
-          # 3.4 Performance Logic
-          if [[ "$MSG" == *"#performance"* || "$MSG" == *"#full"* ]]; then
-            k6 run tests_perf/smoke-load.js --summary-export=k6-summary.json || true
+          # 2. UI (Always Smoke)
+          # Note the change to write output inside the playwright-report folder
+          npx playwright test --grep @smoke --project=chromium --reporter=json > playwright-report/results.json || echo "UI Smoke failed"
+
+          # 3. Perf (Only on #performance or #full)
+          if [[ "$MSG" == *"#performance"* ]] || [[ "$MSG" == *"#full"* ]]; then
+            k6 run tests_perf/smoke-load.js --summary-export=k6-summary.json || echo "k6 failed"
           fi
 
       - name: Aggregate & Upload

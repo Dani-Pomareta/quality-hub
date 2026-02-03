@@ -22,16 +22,15 @@ jobs:
       - name: Execution Engine
         run: |
           MSG=$(git log -1 --pretty=%B)
-          mkdir -p playwright-report  # Ensure directory exists
-
+          
           # 1. API (Always Smoke)
-          pytest tests_python/ -m smoke --json-report --json-report-file=api-report.json || echo "API Smoke failed"
+          pytest tests_python/ -m smoke --json-report --json-report-file=api-report.json || echo "API failed"
 
-          # 2. UI (Always Smoke)
-          # Note the change to write output inside the playwright-report folder
-          npx playwright test --grep @smoke --project=chromium --reporter=json > playwright-report/results.json || echo "UI Smoke failed"
+          # 2. UI (Always Smoke) - PUT IT HERE
+          mkdir -p playwright-report
+          npx playwright test --grep @smoke --project=chromium --reporter=json > playwright-report/results.json || echo "UI failed"
 
-          # 3. Perf (Only on #performance or #full)
+          # 3. Performance Logic (Conditional)
           if [[ "$MSG" == *"#performance"* ]] || [[ "$MSG" == *"#full"* ]]; then
             k6 run tests_perf/smoke-load.js --summary-export=k6-summary.json || echo "k6 failed"
           fi
